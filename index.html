@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CGAF 9(a) – Quick PDF Filler</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;}
+    h1{font-size:1.6rem;margin:0 0 12px}
+    .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 1px 8px rgba(0,0,0,.04)}
+    label{display:block;font-weight:600;margin:10px 0 4px}
+    input,select,button{font-size:16px;padding:10px;border:1px solid #cbd5e1;border-radius:8px;width:100%}
+    .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+    .row{display:flex;gap:12px;align-items:center}
+    .hint{color:#64748b;font-size:.9rem}
+    .btn{background:#111827;color:#fff;border:none;cursor:pointer}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .muted{font-size:.85rem;color:#64748b}
+    .success{background:#ecfdf5;border-color:#10b981}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  </style>
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+</head>
+<body>
+  <h1>CGAF 9(a) – Quick PDF Filler (Cebu BI)</h1>
+  <div class="card">
+    <p class="muted">This tool fills the official CGAF form (Rev. Lev. 4, Effective 07 AUG 2024) with your constant info. You only choose the latest arrival date and months (default 1). Downloaded PDF is ready to print and sign at BI.</p>
+  </div>
+
+  <div class="card">
+    <div class="grid">
+      <div>
+        <label for="arrival">Date of Latest Arrival</label>
+        <input id="arrival" type="date" required>
+      </div>
+      <div>
+        <label for="months">Months to Extend</label>
+        <select id="months">
+          <option value="1" selected>One (1) month</option>
+          <option value="2">Two (2) months</option>
+          <option value="6">Six (6) months</option>
+        </select>
+      </div>
+      <div>
+        <label for="flight">Flight/Voyage No. (optional)</label>
+        <input id="flight" type="text" placeholder="(leave blank if unknown)">
+      </div>
+    </div>
+    <details style="margin-top:12px">
+      <summary><b>Advanced:</b> fine-tune text nudge (for printers with extra margins)</summary>
+      <div class="grid" style="margin-top:8px">
+        <div>
+          <label for="dx">Nudge X (points)</label>
+          <input id="dx" type="number" value="0" step="0.5">
+        </div>
+        <div>
+          <label for="dy">Nudge Y (points)</label>
+          <input id="dy" type="number" value="0" step="0.5">
+        </div>
+      </div>
+      <p class="hint">If you notice tiny misalignment on your printer, download again after adjusting these.</p>
+    </details>
+    <div class="row" style="margin-top:16px">
+      <button class="btn" id="gen">Generate PDF</button>
+    </div>
+  </div>
+
+  <div class="card success" id="done" style="display:none">
+    <b>Done!</b> Check your downloads for <span class="mono" id="fname"></span>.
+  </div>
+
+<script>
+const CONST = {
+  lastName: "NISHIKAWA",
+  firstName: "KEI",
+  dobDay: "26",
+  dobMon: "MAR",
+  dobYear: "1967",
+  sexM: true,
+  birthplace: "Japan",
+  citizenship: "Japan",
+  height: "170",
+  weight: "78",
+  civil: "Single",
+  addr1: "U17-16 Avida Towers Riala 3, IT Park",
+  barangay: "APAS",
+  city: "Cebu City",
+  province: "Cebu",
+  zip: "6000",
+  mobile: "+63 952-479-6208",
+  email: "kei.synet.55@gmail.com",
+  passportNo: "TT6701095",
+  passDay: "05",
+  passMon: "AUG",
+  passYear: "2034",
+  reason: "I am staying long-term for personal travel. I return to Japan occasionally for short visits. No work or business in the Philippines."
+};
+
+// Coordinates (points) relative to PDF page (A4 portrait 612x936).
+// These are tuned for the provided BI form PDF. Use dx/dy nudges to adjust per printer.
+function drawText(page, text, x, y, dx, dy, size=10) {
+  page.drawText(text, { x: x + dx, y: y + dy, size, font: page.docFont });
+}
+
+function drawCheck(page, x, y, dx, dy) {
+  page.drawText("✔", { x: x + dx, y: y + dy, size: 12, font: page.docFont });
+}
+
+async function generate() {
+  const arrival = document.getElementById('arrival').value;
+  if (!arrival) { alert("Please choose 'Date of Latest Arrival'."); return; }
+
+  const months = document.getElementById('months').value;
+  const flight = document.getElementById('flight').value.trim();
+  const dx = parseFloat(document.getElementById('dx').value || "0");
+  const dy = parseFloat(document.getElementById('dy').value || "0");
+
+  // Format dates as DD MMM YYYY
+  const fDate = new Date(arrival);
+  const MMM = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"][fDate.getUTCMonth()];
+  const DD  = String(fDate.getUTCDate()).padStart(2,"0");
+  const YYYY= fDate.getUTCFullYear();
+  const arrivalFmt = `${DD} ${MMM} ${YYYY}`;
+
+  const formBytes = await fetch("form.pdf").then(r => r.arrayBuffer());
+  const { PDFDocument, StandardFonts } = PDFLib;
+  const pdf = await PDFDocument.load(formBytes);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const page = pdf.getPage(0);
+  page.docFont = font;
+
+  // TEXT COORDINATES (approx tuned)
+  // Top: Method, Reason
+  drawCheck(page, 115, 785, dx, dy); // Personal checkbox
+  // Reason multi-line
+  let ry = 730;
+  const reasonLines = CONST.reason.match(/.{1,85}(\s|$)/g) || [CONST.reason];
+  for (let i=0;i<Math.min(6, reasonLines.length);i++){
+    drawText(page, reasonLines[i].trim(), 50, ry - i*15, dx, dy);
+  }
+
+  // Application info - Mode (Regular default) not checked; Months
+  if (months === "1") drawCheck(page, 130, 666, dx, dy);
+  if (months === "2") drawCheck(page, 240, 666, dx, dy);
+  if (months === "6") drawCheck(page, 345, 666, dx, dy);
+
+  // Contact
+  drawText(page, CONST.mobile, 130, 635, dx, dy);
+  drawText(page, CONST.email, 390, 635, dx, dy);
+
+  // Personal
+  drawText(page, CONST.lastName, 95, 603, dx, dy);
+  drawText(page, CONST.firstName, 335, 603, dx, dy);
+  drawText(page, CONST.dobDay, 80, 573, dx, dy);
+  drawText(page, CONST.dobMon, 155, 573, dx, dy);
+  drawText(page, CONST.dobYear, 245, 573, dx, dy);
+  if (CONST.sexM) drawCheck(page, 330, 573, dx, dy); // M
+  drawText(page, CONST.birthplace, 420, 573, dx, dy);
+
+  drawText(page, CONST.citizenship, 120, 543, dx, dy);
+  drawText(page, CONST.height, 290, 543, dx, dy);
+  drawText(page, CONST.weight, 360, 543, dx, dy);
+  drawText(page, CONST.civil, 470, 543, dx, dy);
+
+  drawText(page, CONST.addr1, 200, 512, dx, dy);
+  drawText(page, CONST.barangay, 110, 482, dx, dy);
+  drawText(page, CONST.city, 330, 482, dx, dy);
+  drawText(page, CONST.province, 500, 482, dx, dy);
+  drawText(page, CONST.zip, 560, 482, dx, dy);
+
+  // Travel info
+  drawText(page, CONST.passportNo, 180, 450, dx, dy);
+  drawText(page, `${CONST.passDay} ${CONST.passMon} ${CONST.passYear}`, 460, 450, dx, dy);
+  drawText(page, arrivalFmt, 180, 420, dx, dy);
+  if (flight) drawText(page, flight, 460, 420, dx, dy);
+
+  // Footer: we leave Signature / dates blank for BI
+  const bytes = await pdf.save();
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const m = `KEI_NISHIKAWA_CGAF_${YYYY}-${String(fDate.getUTCMonth()+1).padStart(2,"0")}-${DD}_M${months}.pdf`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = m;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  document.getElementById("done").style.display = "block";
+  document.getElementById("fname").textContent = m;
+}
+
+document.getElementById("gen").addEventListener("click", generate);
+</script>
+</body>
+</html>
