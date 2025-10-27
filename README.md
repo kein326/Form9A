@@ -32,3 +32,4 @@ If your printer adds margins that cause tiny misalignment, adjust **Nudge X/Y** 
 ## Notes
 - All constant personal details are hard‑coded in `index.html` under `CONST`.
 - To change default months, edit the `<select>` element or code.
+- 
