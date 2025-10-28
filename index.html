@@ -67,7 +67,8 @@ input,select,button{font-size:16px;padding:10px;border:1px solid #cbd5e1;border-
     page.drawText(text, { x:x+dx, y:y+dy, size, font });
   }
   function drawCheck(page, x, y, dx, dy, font){
-    page.drawText("✔", { x:x+dx, y:y+dy, size:12, font });
+    // "X" は確実にWinAnsi互換、"✓"も多くの場合OK
+    page.drawText("X", { x:x+dx+2, y:y+dy, size:10, font });
   }
 
   const onReady = () => {
