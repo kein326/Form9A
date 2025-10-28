@@ -2,7 +2,6 @@
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CGAF 9(a) – Quick PDF Filler (Use your filled PDF)</title>
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <style>
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:900px;margin:24px auto;padding:0 16px}
 .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:12px 0}
@@ -11,12 +10,14 @@ input,select,button{font-size:16px;padding:10px;border:1px solid #cbd5e1;border-
 .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .btn{background:#111827;color:#fff;border:none;cursor:pointer}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.warn{color:#b91c1c}
 </style>
 </head>
 <body>
 <h1>CGAF 9(a) – Quick PDF Filler</h1>
 <div class="card">
   <p>手順：<b>「記入済みPDF」</b>を選択 → 最新の入国日と延長月数を選び、<b>Generate</b> を押すだけ。</p>
+  <p class="warn" id="libWarn" style="display:none">PDF ライブラリが読み込めていません。ページを再読み込みしてください。</p>
 </div>
 <div class="card">
   <div class="grid">
@@ -59,55 +60,73 @@ input,select,button{font-size:16px;padding:10px;border:1px solid #cbd5e1;border-
   完了：<span class="mono" id="fname"></span> をダウンロードしました。
 </div>
 
+<script src="./pdf-lib.min.js"></script>
 <script>
-function drawText(page, text, x, y, dx, dy, font, size=10){
-  page.drawText(text, { x:x+dx, y:y+dy, size, font });
-}
-function drawCheck(page, x, y, dx, dy, font){
-  page.drawText("✔", { x:x+dx, y:y+dy, size:12, font });
-}
+(function(){
+  function drawText(page, text, x, y, dx, dy, font, size=10){
+    page.drawText(text, { x:x+dx, y:y+dy, size, font });
+  }
+  function drawCheck(page, x, y, dx, dy, font){
+    page.drawText("✔", { x:x+dx, y:y+dy, size:12, font });
+  }
 
-document.getElementById('gen').addEventListener('click', async () => {
-  const f = document.getElementById('file').files[0];
-  if(!f){ alert('まず「記入済みPDF」を選択してください。'); return; }
-  const arrival = document.getElementById('arrival').value;
-  if(!arrival){ alert("Date of Latest Arrival を選んでください。"); return; }
-  const months = document.getElementById('months').value;
-  const flight = document.getElementById('flight').value.trim();
-  const dx = parseFloat(document.getElementById('dx').value || "0");
-  const dy = parseFloat(document.getElementById('dy').value || "0");
+  const onReady = () => {
+    if (!window.PDFLib) {
+      document.getElementById('libWarn').style.display = 'block';
+      return;
+    }
+    document.getElementById('gen').addEventListener('click', async () => {
+      try{
+        const f = document.getElementById('file').files[0];
+        if(!f){ alert('まず「記入済みPDF」を選択してください。'); return; }
+        const arrival = document.getElementById('arrival').value;
+        if(!arrival){ alert("Date of Latest Arrival を選んでください。"); return; }
+        const months = document.getElementById('months').value;
+        const flight = document.getElementById('flight').value.trim();
+        const dx = parseFloat(document.getElementById('dx').value || "0");
+        const dy = parseFloat(document.getElementById('dy').value || "0");
 
-  const d = new Date(arrival);
-  const MMM = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"][d.getUTCMonth()];
-  const DD  = String(d.getUTCDate()).padStart(2,"0");
-  const YYYY= d.getUTCFullYear();
-  const arrivalFmt = `${DD} ${MMM} ${YYYY}`;
+        const d = new Date(arrival);
+        const MMM = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"][d.getUTCMonth()];
+        const DD  = String(d.getUTCDate()).padStart(2,"0");
+        const YYYY= d.getUTCFullYear();
+        const arrivalFmt = `${DD} ${MMM} ${YYYY}`;
 
-  const buf = await f.arrayBuffer();
-  const { PDFDocument, StandardFonts } = PDFLib;
-  const pdf = await PDFDocument.load(buf);
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const page = pdf.getPage(0);
+        const buf = await f.arrayBuffer();
+        const { PDFDocument, StandardFonts } = PDFLib;
+        const pdf = await PDFDocument.load(buf);
+        const font = await pdf.embedFont(StandardFonts.Helvetica);
+        const page = pdf.getPage(0);
 
-  // ★ 座標はあなたの記入済みPDF（form.pdf）基準のだいたいの位置。
-  // 必要なら Nudge X/Y で微調整してください。
-  // チェック欄（1ヶ月/2ヶ月/6ヶ月）
-  if (months === "1") drawCheck(page, 130, 666, dx, dy, font);
-  if (months === "2") drawCheck(page, 240, 666, dx, dy, font);
-  if (months === "6") drawCheck(page, 345, 666, dx, dy, font);
+        // ★ あなたの「記入済みPDF」前提の座標
+        //   必要に応じて Nudge X/Y で微調整（プリンタ差分吸収）
+        if (months === "1") drawCheck(page, 130, 666, dx, dy, font);
+        if (months === "2") drawCheck(page, 240, 666, dx, dy, font);
+        if (months === "6") drawCheck(page, 345, 666, dx, dy, font);
 
-  // 入国日・便名（TRAVEL INFORMATION）
-  drawText(page, arrivalFmt, 180, 420, dx, dy, font);
-  if (flight) drawText(page, flight, 460, 420, dx, dy, font);
+        drawText(page, arrivalFmt, 180, 420, dx, dy, font); // Arrival
+        if (flight) drawText(page, flight, 460, 420, dx, dy, font); // Flight
 
-  const out = await pdf.save();
-  const blob = new Blob([out], { type: "application/pdf" });
-  const name = `CGAF_${YYYY}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${DD}_M${months}.pdf`;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = name; a.click();
-  URL.revokeObjectURL(url);
-  document.getElementById('done').style.display = 'block';
-  document.getElementById('fname').textContent = name;
-});
+        const out = await pdf.save();
+        const blob = new Blob([out], { type: "application/pdf" });
+        const name = `CGAF_${YYYY}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${DD}_M${months}.pdf`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = name; a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById('done').style.display = 'block';
+        document.getElementById('fname').textContent = name;
+      }catch(e){
+        alert("生成でエラーが出ました: " + e.message);
+        console.error(e);
+      }
+    });
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', onReady);
+  } else {
+    onReady();
+  }
+})();
 </script>
 </body></html>
